@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace MiladTech\Subscriptions\Models;
 
+use Pishran\LaravelPersianSlug\HasPersianSlug;
 use Spatie\Sluggable\SlugOptions;
 use MiladTech\Support\Traits\HasSlug;
 use Spatie\EloquentSortable\Sortable;
@@ -70,7 +71,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
  */
 class Plan extends Model implements Sortable
 {
-    use HasSlug;
+    use HasPersianSlug;
     use SoftDeletes;
     use HasFactory;
     use SortableTrait;
