@@ -35,7 +35,7 @@
         "illuminate/console": "^8.0.0 || ^9.0.0",
         "illuminate/database": "^8.0.0 || ^9.0.0",
         "illuminate/support": "^8.0.0 || ^9.0.0",
-        "miladtech/laravel-support": "^6.0.4",
+        "miladtech/laravel-support": "^6.0.5",
         "spatie/eloquent-sortable": "^4.0.0",
         "pishran/laravel-persian-slug": "^2.2.2",
         "spatie/laravel-translatable": "^5.0.0"
