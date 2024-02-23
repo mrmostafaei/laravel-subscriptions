@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](CONTRIBUTING.md).
 
+## [v7.0.0] - 2024-02-23
+- Laravel 10 Support
 
 ## [v6.0.1] - 2021-12-15
 - Soft deleting children models on soft deleting parent models
