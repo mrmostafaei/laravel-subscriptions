@@ -176,7 +176,7 @@ class Plan extends Model implements Sortable
     {
         $this->setTable(config('miladtech.subscriptions.tables.plans'));
         $this->mergeRules([
-            'slug' => 'required|alpha_dash|max:150|unique:'.config('miladtech.subscriptions.tables.plans').',slug',
+            'slug' => 'alpha_dash|max:150|unique:'.config('miladtech.subscriptions.tables.plans').',slug',
             'name' => 'required|string|strip_tags|max:150',
             'description' => 'nullable|string|max:32768',
             'is_active' => 'sometimes|boolean',
@@ -220,9 +220,9 @@ class Plan extends Model implements Sortable
     public function getSlugOptions(): SlugOptions
     {
         return SlugOptions::create()
-                          ->doNotGenerateSlugsOnUpdate()
-                          ->generateSlugsFrom('name')
-                          ->saveSlugsTo('slug');
+            ->doNotGenerateSlugsOnUpdate()
+            ->generateSlugsFrom('name')
+            ->saveSlugsTo('slug');
     }
 
     /**
