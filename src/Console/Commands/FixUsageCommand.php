@@ -28,6 +28,7 @@ class FixUsageCommand extends Command
      */
     protected $signature = 'subscriptions:fix-usage
                             {--dry-run : Report what would change without writing}
+                            {--match-base : When no exact slug match exists, match by base slug ignoring the numeric suffix v1 appended (e.g. "treatment-3" -> "treatment")}
                             {--prune : Delete usage rows that cannot be matched to any feature on the current plan}';
 
     /**
@@ -47,6 +48,7 @@ class FixUsageCommand extends Command
 
         $dryRun = (bool) $this->option('dry-run');
         $prune = (bool) $this->option('prune');
+        $matchBase = (bool) $this->option('match-base');
 
         $healthy = 0;
         $remapped = 0;
@@ -54,13 +56,13 @@ class FixUsageCommand extends Command
         $deleted = 0;
         $unmatched = 0;
 
-        $run = function () use ($usageModel, $featureModel, $dryRun, $prune, &$healthy, &$remapped, &$merged, &$deleted, &$unmatched): void {
+        $run = function () use ($usageModel, $featureModel, $dryRun, $prune, $matchBase, &$healthy, &$remapped, &$merged, &$deleted, &$unmatched): void {
             $usageModel::query()
                 ->with([
                     'feature' => fn ($query) => $query->withTrashed(),
                     'subscription' => fn ($query) => $query->withTrashed(),
                 ])
-                ->chunkById(200, function ($rows) use ($usageModel, $featureModel, $dryRun, $prune, &$healthy, &$remapped, &$merged, &$deleted, &$unmatched): void {
+                ->chunkById(200, function ($rows) use ($usageModel, $featureModel, $dryRun, $prune, $matchBase, &$healthy, &$remapped, &$merged, &$deleted, &$unmatched): void {
                     foreach ($rows as $usage) {
                         $subscription = $usage->subscription;
 
@@ -91,6 +93,14 @@ class FixUsageCommand extends Command
                             ->where('plan_id', $subscription->plan_id)
                             ->where('slug', $slug)
                             ->first();
+
+                        // v1 enforced globally-unique feature slugs and appended
+                        // numeric suffixes ("treatment-3"). With --match-base we
+                        // fall back to the base slug — only when the match is
+                        // unambiguous (exactly one candidate on the plan).
+                        if ($target === null && $matchBase && $slug !== null) {
+                            $target = $this->findByBaseSlug($featureModel, (int) $subscription->plan_id, $slug);
+                        }
 
                         if ($target === null) {
                             if ($prune) {
@@ -151,9 +161,42 @@ class FixUsageCommand extends Command
         $this->info(($dryRun ? '[DRY RUN] ' : '')."Healthy: {$healthy} | Remapped: {$remapped} | Merged: {$merged} | Deleted: {$deleted} | Unmatched: {$unmatched}");
 
         if ($unmatched > 0 && ! $prune) {
-            $this->comment('Unmatched rows kept. Re-run with --prune to delete them.');
+            $this->comment('Unmatched rows kept. Re-run with --match-base to match ignoring v1 numeric slug suffixes, or --prune to delete them.');
         }
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Find the single feature on the plan whose base slug matches the
+     * given (possibly suffixed) slug. Returns null when zero or more
+     * than one candidate exists — ambiguity is never guessed.
+     */
+    protected function findByBaseSlug(string $featureModel, int $planId, string $slug): ?object
+    {
+        $base = preg_replace('/-\d+$/u', '', $slug);
+
+        if ($base === '' || $base === null) {
+            return null;
+        }
+
+        $candidates = $featureModel::query()
+            ->where('plan_id', $planId)
+            ->where(function ($query) use ($base): void {
+                $query->where('slug', $base)->orWhere('slug', 'LIKE', $base.'-%');
+            })
+            ->get()
+            ->filter(fn (object $feature): bool => preg_match('/^'.preg_quote($base, '/').'(-\d+)?$/u', (string) $feature->slug) === 1)
+            ->values();
+
+        if ($candidates->count() !== 1) {
+            if ($candidates->count() > 1) {
+                $this->warn("  ambiguous base-slug match for '{$slug}' on plan #{$planId} (".$candidates->pluck('slug')->implode(', ').') — skipped');
+            }
+
+            return null;
+        }
+
+        return $candidates->first();
     }
 }
