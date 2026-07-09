@@ -25,7 +25,6 @@ use MiladTech\Subscriptions\Events\SubscriptionSuspended;
 use MiladTech\Subscriptions\Events\SubscriptionUncanceled;
 use MiladTech\Subscriptions\Exceptions\FeatureNotFoundException;
 use MiladTech\Subscriptions\Exceptions\FeatureUsageExceededException;
-use MiladTech\Subscriptions\Exceptions\InactivePlanException;
 use MiladTech\Subscriptions\Exceptions\SubscriptionException;
 use MiladTech\Subscriptions\Services\Period;
 use MiladTech\Subscriptions\Traits\BelongsToPlan;
@@ -458,7 +457,11 @@ class PlanSubscription extends Model
      * usage of features missing from the new plan is removed. If the two
      * plans bill on different frequencies, a new period starts today.
      *
-     * @throws \MiladTech\Subscriptions\Exceptions\InactivePlanException
+     * Note: `is_active` is NOT enforced here — changing an existing
+     * subscriber's plan is an internal/admin operation, and inactive
+     * plans are commonly used as private/custom plans that admins
+     * attach manually. `is_active` only gates NEW public subscriptions
+     * (see HasPlanSubscriptions::newPlanSubscription).
      *
      * @return $this
      */
@@ -466,10 +469,6 @@ class PlanSubscription extends Model
     {
         if ($newPlan->getKey() === $this->plan_id) {
             return $this;
-        }
-
-        if (! $newPlan->is_active) {
-            throw new InactivePlanException((string) $newPlan->slug);
         }
 
         return DB::transaction(function () use ($newPlan, $syncUsage): static {

@@ -33,7 +33,8 @@ This project adheres to [Semantic Versioning](CONTRIBUTING.md).
 - Month/year date math no longer overflows (Jan 31 + 1 month = Feb 28, not Mar 3).
 - Subscription slugs are unique per subscriber (composite index) instead of globally, so every subscriber can own e.g. `main`; the broken `LIKE %slug%` lookup is now an exact match.
 - Feature slugs are unique per plan, letting plans share feature slugs — plan changes migrate usage to the new plan's features by slug and drop usage of removed features.
-- `changePlan()` validates the target plan is active; immediate cancel also ends an active trial.
+- Immediate cancel also ends an active trial.
+- `is_active` gates new public subscriptions only (`newPlanSubscription`, bypassable with `$skipPlanChecks`); `changePlan()` intentionally allows inactive plans so admins can attach private/custom plans.
 - `subscribedPlans()` return type fixed; `scopeByFeatureSlug` no longer matches features of other plans.
 
 ### Changed (breaking)

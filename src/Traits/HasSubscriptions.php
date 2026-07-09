@@ -46,8 +46,8 @@ trait HasSubscriptions
     /**
      * Subscribe subscriber to a new plan.
      */
-    public function newSubscription(string $name, Plan $plan, CarbonInterface|string|null $startDate = null): PlanSubscription
+    public function newSubscription(string $name, Plan $plan, CarbonInterface|string|null $startDate = null, bool $skipPlanChecks = false): PlanSubscription
     {
-        return $this->newPlanSubscription($name, $plan, $startDate);
+        return $this->newPlanSubscription($name, $plan, $startDate, $skipPlanChecks);
     }
 }

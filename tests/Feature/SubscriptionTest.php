@@ -308,15 +308,27 @@ class SubscriptionTest extends TestCase
         $this->assertSame('2027-01-10 00:00:00', $subscription->ends_at->toDateTimeString());
     }
 
-    public function test_change_to_inactive_plan_is_rejected(): void
+    public function test_change_plan_allows_inactive_plans_for_admin_flows(): void
     {
         $subscription = $this->createUser()->newPlanSubscription('main', $this->createPlan());
 
-        $inactive = $this->createPlan(['name' => 'Disabled', 'is_active' => false]);
+        // Inactive plans are commonly private/custom plans attached manually
+        // by admins — changePlan must not reject them.
+        $private = $this->createPlan(['name' => 'Private Custom', 'is_active' => false]);
 
-        $this->expectException(InactivePlanException::class);
+        $subscription->changePlan($private);
 
-        $subscription->changePlan($inactive);
+        $this->assertSame($private->getKey(), $subscription->plan_id);
+    }
+
+    public function test_new_subscription_plan_checks_can_be_skipped(): void
+    {
+        $inactive = $this->createPlan(['name' => 'Private', 'is_active' => false]);
+
+        $subscription = $this->createUser()->newPlanSubscription('main', $inactive, null, true);
+
+        $this->assertTrue($subscription->active());
+        $this->assertSame($inactive->getKey(), $subscription->plan_id);
     }
 
     public function test_check_command_fires_expiry_and_trial_events_exactly_once(): void

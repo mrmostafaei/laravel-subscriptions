@@ -113,18 +113,20 @@ trait HasPlanSubscriptions
      * Fixes over the legacy implementation:
      *  - plans without a trial no longer crash and get `trial_ends_at = null`
      *  - inactive plans and plans at their subscriber limit are rejected
+     *    (pass `$skipPlanChecks = true` for admin/internal flows that
+     *    attach private/inactive plans manually)
      *  - the paid period starts at trial end only when a trial exists
      *
      * @throws \MiladTech\Subscriptions\Exceptions\InactivePlanException
      * @throws \MiladTech\Subscriptions\Exceptions\PlanSubscribersLimitReachedException
      */
-    public function newPlanSubscription(string $name, Plan $plan, CarbonInterface|string|null $startDate = null): PlanSubscription
+    public function newPlanSubscription(string $name, Plan $plan, CarbonInterface|string|null $startDate = null, bool $skipPlanChecks = false): PlanSubscription
     {
-        if (! $plan->is_active) {
+        if (! $skipPlanChecks && ! $plan->is_active) {
             throw new InactivePlanException((string) $plan->slug);
         }
 
-        if (! $plan->hasSubscriberCapacity()) {
+        if (! $skipPlanChecks && ! $plan->hasSubscriberCapacity()) {
             throw new PlanSubscribersLimitReachedException((string) $plan->slug, (int) $plan->active_subscribers_limit);
         }
 

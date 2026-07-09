@@ -79,7 +79,11 @@ $user->newPlanSubscription('main', $plan);            // starts now
 $user->newPlanSubscription('main', $plan, $date);     // starts at a given date
 ```
 
-Plans without a trial get `trial_ends_at = null`; with a trial, the paid period starts when the trial ends. Inactive plans and plans at their `active_subscribers_limit` throw (`InactivePlanException`, `PlanSubscribersLimitReachedException`).
+Plans without a trial get `trial_ends_at = null`; with a trial, the paid period starts when the trial ends. Inactive plans and plans at their `active_subscribers_limit` throw (`InactivePlanException`, `PlanSubscribersLimitReachedException`). For admin/internal flows that attach private (inactive) plans manually, skip those checks:
+
+```php
+$user->newPlanSubscription('main', $privatePlan, null, skipPlanChecks: true);
+```
 
 ### Check status
 
@@ -154,6 +158,8 @@ $subscription->changePlan($newPlan);
 ```
 
 Usage is migrated to the new plan's features **by slug**: shared features keep their usage (limits may shrink or grow naturally), removed features lose their usage. Different billing frequency starts a new period today. Pass `changePlan($newPlan, syncUsage: false)` to wipe usage instead.
+
+`changePlan` accepts inactive plans on purpose — changing an existing subscriber's plan is an internal/admin operation, and inactive plans are commonly private/custom plans attached manually. `is_active` only gates new public subscriptions.
 
 ### Events
 
