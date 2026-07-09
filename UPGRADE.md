@@ -26,7 +26,17 @@ Fresh installs skip this — the base migrations already include everything.
 
 > Note: the upgrade migration converts the global unique index on subscription slugs to a per-subscriber unique index, and the global unique index on feature slugs to a per-plan unique index. If your data contains duplicates that would now collide (same subscriber + same slug), clean them first.
 
-## 4. Behavior changes to review in your code
+## 4. Repair v1 usage data
+
+v1 could leave usage rows pointing at soft-deleted features (plan features edited by delete + recreate) or at a previous plan's features (`changePlan` never remapped usage). v8 reads usage strictly through the subscription's current plan, so such rows show up as zero usage. Repair them once:
+
+```bash
+php artisan subscriptions:fix-usage --dry-run   # preview
+php artisan subscriptions:fix-usage             # apply
+php artisan subscriptions:fix-usage --prune     # also delete rows matching no current feature
+```
+
+## 5. Behavior changes to review in your code
 
 **`renew()`** — early renewal now extends from `ends_at` (paid time is preserved, usage kept). Only expired subscriptions restart from "now" and clear usage. Previously every renewal restarted from now and cleared usage.
 

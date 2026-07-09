@@ -6,6 +6,7 @@ namespace MiladTech\Subscriptions\Providers;
 
 use Illuminate\Support\ServiceProvider;
 use MiladTech\Subscriptions\Console\Commands\CheckSubscriptionsCommand;
+use MiladTech\Subscriptions\Console\Commands\FixUsageCommand;
 
 class SubscriptionsServiceProvider extends ServiceProvider
 {
@@ -48,6 +49,7 @@ class SubscriptionsServiceProvider extends ServiceProvider
 
             $this->commands([
                 CheckSubscriptionsCommand::class,
+                FixUsageCommand::class,
             ]);
         }
     }

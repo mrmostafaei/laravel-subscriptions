@@ -16,6 +16,7 @@ This project adheres to [Semantic Versioning](CONTRIBUTING.md).
 - Absolute usage setter: `setFeatureUsage()`, plus `canUseFeature($slug, $uses)` for bulk checks.
 - Lifecycle events: `SubscriptionCreated`, `SubscriptionRenewed`, `SubscriptionCanceled`, `SubscriptionUncanceled`, `SubscriptionSuspended`, `SubscriptionResumed`, `SubscriptionPlanChanged`, `SubscriptionExpired`, `SubscriptionTrialEnded`, `FeatureUsageRecorded`, `FeatureUsageReduced`.
 - `subscriptions:check` artisan command — fires trial-ended/expired events exactly once (grace aware); schedule it.
+- `subscriptions:fix-usage` artisan command — repairs v1 usage data: remaps rows orphaned on soft-deleted features or previous plans (matched by slug), merges duplicates; supports `--dry-run` and `--prune`.
 - Domain exceptions: `FeatureNotFoundException`, `FeatureUsageExceededException`, `InactivePlanException`, `PlanSubscribersLimitReachedException`, `InvalidIntervalException` (all extend `SubscriptionException`).
 - `active_subscribers_limit` is now actually enforced on subscribe.
 - Full test suite (PHPUnit + Testbench) and GitHub Actions CI matrix.
