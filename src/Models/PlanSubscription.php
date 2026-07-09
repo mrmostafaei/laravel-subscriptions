@@ -4,21 +4,34 @@ declare(strict_types=1);
 
 namespace MiladTech\Subscriptions\Models;
 
-use DB;
 use Carbon\Carbon;
-use Illuminate\Support\Facades\Log;
-use LogicException;
-use Spatie\Sluggable\SlugOptions;
-use MiladTech\Support\Traits\HasSlug;
-use Illuminate\Database\Eloquent\Model;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
-use MiladTech\Subscriptions\Services\Period;
-use MiladTech\Support\Traits\HasTranslations;
-use MiladTech\Support\Traits\ValidatingTrait;
-use Illuminate\Database\Eloquent\SoftDeletes;
-use MiladTech\Subscriptions\Traits\BelongsToPlan;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\DB;
+use InvalidArgumentException;
+use MiladTech\Subscriptions\Enums\Interval;
+use MiladTech\Subscriptions\Events\FeatureUsageRecorded;
+use MiladTech\Subscriptions\Events\FeatureUsageReduced;
+use MiladTech\Subscriptions\Events\SubscriptionCanceled;
+use MiladTech\Subscriptions\Events\SubscriptionCreated;
+use MiladTech\Subscriptions\Events\SubscriptionPlanChanged;
+use MiladTech\Subscriptions\Events\SubscriptionRenewed;
+use MiladTech\Subscriptions\Events\SubscriptionResumed;
+use MiladTech\Subscriptions\Events\SubscriptionSuspended;
+use MiladTech\Subscriptions\Events\SubscriptionUncanceled;
+use MiladTech\Subscriptions\Exceptions\FeatureNotFoundException;
+use MiladTech\Subscriptions\Exceptions\FeatureUsageExceededException;
+use MiladTech\Subscriptions\Exceptions\InactivePlanException;
+use MiladTech\Subscriptions\Exceptions\SubscriptionException;
+use MiladTech\Subscriptions\Services\Period;
+use MiladTech\Subscriptions\Traits\BelongsToPlan;
+use Pishran\LaravelPersianSlug\HasPersianSlug;
+use Spatie\Sluggable\SlugOptions;
+use Spatie\Translatable\HasTranslations;
 
 /**
  * MiladTech\Subscriptions\Models\PlanSubscription.
@@ -28,50 +41,30 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
  * @property string              $subscriber_type
  * @property int                 $plan_id
  * @property string              $slug
- * @property array               $title
- * @property array               $description
+ * @property array               $name
+ * @property array|null         $description
+ * @property string|null        $timezone
  * @property \Carbon\Carbon|null $trial_ends_at
  * @property \Carbon\Carbon|null $starts_at
  * @property \Carbon\Carbon|null $ends_at
  * @property \Carbon\Carbon|null $cancels_at
  * @property \Carbon\Carbon|null $canceled_at
+ * @property \Carbon\Carbon|null $suspended_at
+ * @property \Carbon\Carbon|null $expired_notified_at
+ * @property \Carbon\Carbon|null $trial_ended_notified_at
  * @property \Carbon\Carbon|null $created_at
  * @property \Carbon\Carbon|null $updated_at
  * @property \Carbon\Carbon|null $deleted_at
  * @property-read \MiladTech\Subscriptions\Models\Plan                                                             $plan
  * @property-read \Illuminate\Database\Eloquent\Collection|\MiladTech\Subscriptions\Models\PlanSubscriptionUsage[] $usage
- * @property-read \Illuminate\Database\Eloquent\Model|\Eloquent                                                 $subscriber
- *
- * @method static \Illuminate\Database\Eloquent\Builder|\MiladTech\Subscriptions\Models\PlanSubscription byPlanId($planId)
- * @method static \Illuminate\Database\Eloquent\Builder|\MiladTech\Subscriptions\Models\PlanSubscription findEndedPeriod()
- * @method static \Illuminate\Database\Eloquent\Builder|\MiladTech\Subscriptions\Models\PlanSubscription findEndedTrial()
- * @method static \Illuminate\Database\Eloquent\Builder|\MiladTech\Subscriptions\Models\PlanSubscription findEndingPeriod($dayRange = 3)
- * @method static \Illuminate\Database\Eloquent\Builder|\MiladTech\Subscriptions\Models\PlanSubscription findEndingTrial($dayRange = 3)
- * @method static \Illuminate\Database\Eloquent\Builder|\MiladTech\Subscriptions\Models\PlanSubscription ofSubscriber(\Illuminate\Database\Eloquent\Model $subscriber)
- * @method static \Illuminate\Database\Eloquent\Builder|\MiladTech\Subscriptions\Models\PlanSubscription whereCanceledAt($value)
- * @method static \Illuminate\Database\Eloquent\Builder|\MiladTech\Subscriptions\Models\PlanSubscription whereCancelsAt($value)
- * @method static \Illuminate\Database\Eloquent\Builder|\MiladTech\Subscriptions\Models\PlanSubscription whereCreatedAt($value)
- * @method static \Illuminate\Database\Eloquent\Builder|\MiladTech\Subscriptions\Models\PlanSubscription whereDeletedAt($value)
- * @method static \Illuminate\Database\Eloquent\Builder|\MiladTech\Subscriptions\Models\PlanSubscription whereDescription($value)
- * @method static \Illuminate\Database\Eloquent\Builder|\MiladTech\Subscriptions\Models\PlanSubscription whereEndsAt($value)
- * @method static \Illuminate\Database\Eloquent\Builder|\MiladTech\Subscriptions\Models\PlanSubscription whereId($value)
- * @method static \Illuminate\Database\Eloquent\Builder|\MiladTech\Subscriptions\Models\PlanSubscription whereTitle($value)
- * @method static \Illuminate\Database\Eloquent\Builder|\MiladTech\Subscriptions\Models\PlanSubscription wherePlanId($value)
- * @method static \Illuminate\Database\Eloquent\Builder|\MiladTech\Subscriptions\Models\PlanSubscription whereSlug($value)
- * @method static \Illuminate\Database\Eloquent\Builder|\MiladTech\Subscriptions\Models\PlanSubscription whereStartsAt($value)
- * @method static \Illuminate\Database\Eloquent\Builder|\MiladTech\Subscriptions\Models\PlanSubscription whereTrialEndsAt($value)
- * @method static \Illuminate\Database\Eloquent\Builder|\MiladTech\Subscriptions\Models\PlanSubscription whereUpdatedAt($value)
- * @method static \Illuminate\Database\Eloquent\Builder|\MiladTech\Subscriptions\Models\PlanSubscription whereSubscriberId($value)
- * @method static \Illuminate\Database\Eloquent\Builder|\MiladTech\Subscriptions\Models\PlanSubscription whereSubscriberType($value)
- * @mixin \Eloquent
+ * @property-read \Illuminate\Database\Eloquent\Model                                                              $subscriber
  */
 class PlanSubscription extends Model
 {
-    use HasSlug;
-    use SoftDeletes;
     use BelongsToPlan;
+    use HasPersianSlug;
     use HasTranslations;
-    use ValidatingTrait;
+    use SoftDeletes;
 
     /**
      * {@inheritdoc}
@@ -83,6 +76,7 @@ class PlanSubscription extends Model
         'slug',
         'name',
         'description',
+        'timezone',
         'trial_ends_at',
         'starts_at',
         'ends_at',
@@ -103,15 +97,17 @@ class PlanSubscription extends Model
         'ends_at' => 'datetime',
         'cancels_at' => 'datetime',
         'canceled_at' => 'datetime',
+        'suspended_at' => 'datetime',
+        'expired_notified_at' => 'datetime',
+        'trial_ended_notified_at' => 'datetime',
         'deleted_at' => 'datetime',
     ];
 
     /**
      * {@inheritdoc}
      */
-    protected $observables = [
-        'validating',
-        'validated',
+    protected $dispatchesEvents = [
+        'created' => SubscriptionCreated::class,
     ];
 
     /**
@@ -125,41 +121,11 @@ class PlanSubscription extends Model
     ];
 
     /**
-     * The default rules that the model will validate against.
-     *
-     * @var array
-     */
-    protected $rules = [];
-
-    /**
-     * Whether the model should throw a
-     * ValidationException if it fails validation.
-     *
-     * @var bool
-     */
-    protected $throwValidationExceptions = true;
-
-    /**
      * Create a new Eloquent model instance.
-     *
-     * @param array $attributes
      */
     public function __construct(array $attributes = [])
     {
         $this->setTable(config('miladtech.subscriptions.tables.plan_subscriptions'));
-        $this->mergeRules([
-            'name' => 'required|string|strip_tags|max:150',
-            'description' => 'nullable|string|max:32768',
-            'slug' => 'required|alpha_dash|max:150|unique:'.config('miladtech.subscriptions.tables.plan_subscriptions').',slug',
-            'plan_id' => 'required|integer|exists:'.config('miladtech.subscriptions.tables.plans').',id',
-            'subscriber_id' => 'required|integer',
-            'subscriber_type' => 'required|string|strip_tags|max:150',
-            'trial_ends_at' => 'nullable|date',
-            'starts_at' => 'required|date',
-            'ends_at' => 'required|date',
-            'cancels_at' => 'nullable|date',
-            'canceled_at' => 'nullable|date',
-        ]);
 
         parent::__construct($attributes);
     }
@@ -171,13 +137,15 @@ class PlanSubscription extends Model
     {
         parent::boot();
 
-        static::validating(function (self $model) {
-            if (! $model->starts_at || ! $model->ends_at) {
-                $model->setNewPeriod();
+        static::creating(function (self $subscription): void {
+            if (! $subscription->starts_at || ! $subscription->ends_at) {
+                $subscription->setNewPeriod();
             }
+
+            $subscription->makeSlugUniqueForSubscriber();
         });
 
-        static::deleted(function ($subscription) {
+        static::deleted(function (self $subscription): void {
             $subscription->usage()->delete();
         });
     }
@@ -185,20 +153,22 @@ class PlanSubscription extends Model
     /**
      * Get the options for generating the slug.
      *
-     * @return \Spatie\Sluggable\SlugOptions
+     * Duplicate slugs are allowed globally; uniqueness is guaranteed
+     * per subscriber (see makeSlugUniqueForSubscriber and the composite
+     * unique index) so every subscriber can own a subscription called
+     * e.g. "main" and look it up reliably by that exact slug.
      */
     public function getSlugOptions(): SlugOptions
     {
         return SlugOptions::create()
             ->doNotGenerateSlugsOnUpdate()
             ->generateSlugsFrom('name')
+            ->allowDuplicateSlugs()
             ->saveSlugsTo('slug');
     }
 
     /**
      * Get the owning subscriber.
-     *
-     * @return \Illuminate\Database\Eloquent\Relations\MorphTo
      */
     public function subscriber(): MorphTo
     {
@@ -207,28 +177,33 @@ class PlanSubscription extends Model
 
     /**
      * The subscription may have many usage.
-     *
-     * @return \Illuminate\Database\Eloquent\Relations\HasMany
      */
-    public function usage(): hasMany
+    public function usage(): HasMany
     {
         return $this->hasMany(config('miladtech.subscriptions.models.plan_subscription_usage'), 'subscription_id', 'id');
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | State checks
+    |--------------------------------------------------------------------------
+    */
+
     /**
-     * Check if subscription is active.
-     *
-     * @return bool
+     * Check if subscription is active: not suspended, and either on trial,
+     * within the current period, or within the plan's grace period.
      */
     public function active(): bool
     {
-        return ! $this->ended() || $this->onTrial();
+        if ($this->suspended()) {
+            return false;
+        }
+
+        return $this->onTrial() || ! $this->ended() || $this->onGracePeriod();
     }
 
     /**
      * Check if subscription is inactive.
-     *
-     * @return bool
      */
     public function inactive(): bool
     {
@@ -237,192 +212,538 @@ class PlanSubscription extends Model
 
     /**
      * Check if subscription is currently on trial.
-     *
-     * @return bool
      */
     public function onTrial(): bool
     {
-        return $this->trial_ends_at ? Carbon::now()->lt($this->trial_ends_at) : false;
+        return $this->trial_ends_at !== null && Carbon::now()->lt($this->trial_ends_at);
     }
 
     /**
-     * Check if subscription is canceled.
-     *
-     * @return bool
+     * Check if subscription is canceled (scheduled or immediate).
      */
     public function canceled(): bool
     {
-        return $this->canceled_at ? Carbon::now()->gte($this->canceled_at) : false;
+        return $this->canceled_at !== null;
     }
 
     /**
      * Check if subscription period has ended.
-     *
-     * @return bool
      */
     public function ended(): bool
     {
-        return $this->ends_at ? Carbon::now()->gte($this->ends_at) : false;
+        return $this->ends_at !== null && Carbon::now()->gte($this->ends_at);
     }
+
+    /**
+     * Check if the ended subscription is still within its plan's grace period.
+     */
+    public function onGracePeriod(): bool
+    {
+        if (! $this->ended() || ! $this->plan?->hasGrace()) {
+            return false;
+        }
+
+        $graceEndsAt = $this->graceEndsAt();
+
+        return $graceEndsAt !== null && Carbon::now()->lt($graceEndsAt);
+    }
+
+    /**
+     * The moment access is truly lost: end of period plus grace (if any).
+     */
+    public function graceEndsAt(): ?CarbonInterface
+    {
+        if ($this->ends_at === null) {
+            return null;
+        }
+
+        if (! $this->plan?->hasGrace()) {
+            return $this->ends_at->copy();
+        }
+
+        return $this->plan->grace_interval->addTo($this->ends_at->copy(), $this->plan->grace_period);
+    }
+
+    /**
+     * Check if subscription is suspended.
+     */
+    public function suspended(): bool
+    {
+        return $this->suspended_at !== null;
+    }
+
+    /**
+     * Remaining full days of the current period (0 when ended).
+     */
+    public function remainingDays(): int
+    {
+        if ($this->ends_at === null || ! $this->ends_at->isFuture()) {
+            return 0;
+        }
+
+        return (int) Carbon::now()->diffInDays($this->ends_at, true);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Lifecycle actions
+    |--------------------------------------------------------------------------
+    */
 
     /**
      * Cancel subscription.
      *
-     * @param bool $immediately
+     * By default the subscription stays usable until the end of the paid
+     * period (`cancels_at` = `ends_at`). Pass `$immediately = true` to
+     * terminate access right away (also ends an active trial).
      *
      * @return $this
      */
-    public function cancel($immediately = false)
+    public function cancel(bool $immediately = false): static
     {
         $this->canceled_at = Carbon::now();
+        $this->cancels_at = $this->ends_at?->copy();
 
         if ($immediately) {
-            $this->ends_at = $this->canceled_at;
+            $this->cancels_at = $this->canceled_at->copy();
+            $this->ends_at = $this->canceled_at->copy();
+
+            if ($this->trial_ends_at !== null && $this->trial_ends_at->isFuture()) {
+                $this->trial_ends_at = $this->canceled_at->copy();
+            }
         }
 
         $this->save();
 
+        event(new SubscriptionCanceled($this));
+
         return $this;
+    }
+
+    /**
+     * Revert a scheduled cancellation (only possible while the period is running).
+     *
+     * @throws \MiladTech\Subscriptions\Exceptions\SubscriptionException
+     *
+     * @return $this
+     */
+    public function uncancel(): static
+    {
+        if (! $this->canceled()) {
+            return $this;
+        }
+
+        if ($this->ended()) {
+            throw new SubscriptionException('Cannot uncancel an ended subscription; use renew() instead.');
+        }
+
+        $this->canceled_at = null;
+        $this->cancels_at = null;
+        $this->save();
+
+        event(new SubscriptionUncanceled($this));
+
+        return $this;
+    }
+
+    /**
+     * Suspend the subscription (e.g. failed payment, abuse).
+     *
+     * @return $this
+     */
+    public function suspend(): static
+    {
+        if ($this->suspended()) {
+            return $this;
+        }
+
+        $this->suspended_at = Carbon::now();
+        $this->save();
+
+        event(new SubscriptionSuspended($this));
+
+        return $this;
+    }
+
+    /**
+     * Resume a suspended subscription.
+     *
+     * When `$creditPausedTime` is true (default), the time spent suspended
+     * is added back to `ends_at`, so subscribers never lose paid time.
+     *
+     * @return $this
+     */
+    public function resume(bool $creditPausedTime = true): static
+    {
+        if (! $this->suspended()) {
+            return $this;
+        }
+
+        if ($creditPausedTime && $this->ends_at !== null && $this->ends_at->gt($this->suspended_at)) {
+            $pausedSeconds = (int) $this->suspended_at->diffInSeconds(Carbon::now(), true);
+            $this->ends_at = $this->ends_at->copy()->addSeconds($pausedSeconds);
+        }
+
+        $this->suspended_at = null;
+        $this->save();
+
+        event(new SubscriptionResumed($this));
+
+        return $this;
+    }
+
+    /**
+     * Renew the subscription for N invoice periods.
+     *
+     * - If the subscription already ended: a fresh period starts now and
+     *   usage data is cleared.
+     * - If it is still running (early renewal): the new period is appended
+     *   to `ends_at`, so the subscriber keeps every day already paid for,
+     *   and current usage data is preserved.
+     *
+     * Renewing also clears any cancellation, reactivating the subscription.
+     *
+     * @throws \MiladTech\Subscriptions\Exceptions\SubscriptionException
+     * @throws \InvalidArgumentException
+     *
+     * @return $this
+     */
+    public function renew(int $periods = 1): static
+    {
+        if ($periods < 1) {
+            throw new InvalidArgumentException("Renewal periods must be at least 1, [{$periods}] given.");
+        }
+
+        if ($this->suspended()) {
+            throw new SubscriptionException('Cannot renew a suspended subscription; resume it first.');
+        }
+
+        $plan = $this->plan;
+
+        if ($plan === null) {
+            throw new SubscriptionException('Cannot renew a subscription whose plan no longer exists.');
+        }
+
+        return DB::transaction(function () use ($periods, $plan): static {
+            if ($this->ended()) {
+                // Expired: start a fresh billing cycle from now.
+                $this->usage()->delete();
+
+                $period = new Period($plan->invoice_interval, $plan->invoice_period * $periods, Carbon::now());
+                $this->starts_at = $period->getStartDate();
+                $this->ends_at = $period->getEndDate();
+            } else {
+                // Early renewal: extend the current cycle, never losing paid time.
+                $period = new Period($plan->invoice_interval, $plan->invoice_period * $periods, $this->ends_at);
+                $this->ends_at = $period->getEndDate();
+            }
+
+            $this->canceled_at = null;
+            $this->cancels_at = null;
+            $this->expired_notified_at = null;
+            $this->save();
+
+            event(new SubscriptionRenewed($this));
+
+            return $this;
+        });
     }
 
     /**
      * Change subscription plan.
      *
-     * @param \MiladTech\Subscriptions\Models\Plan $plan
+     * Usage records are migrated to the new plan's features (matched by
+     * feature slug): usage of features that also exist on the new plan is
+     * kept — so raising or lowering feature limits works naturally — and
+     * usage of features missing from the new plan is removed. If the two
+     * plans bill on different frequencies, a new period starts today.
+     *
+     * @throws \MiladTech\Subscriptions\Exceptions\InactivePlanException
      *
      * @return $this
      */
-    public function changePlan(Plan $plan)
+    public function changePlan(Plan $newPlan, bool $syncUsage = true): static
     {
-        // If plans does not have the same billing frequency
-        // (e.g., invoice_interval and invoice_period) we will update
-        // the billing dates starting today, and sice we are basically creating
-        // a new billing cycle, the usage data will be cleared.
-        if ($this->plan->invoice_interval !== $plan->invoice_interval || $this->plan->invoice_period !== $plan->invoice_period) {
-            $this->setNewPeriod($plan->invoice_interval, $plan->invoice_period);
-            $this->usage()->delete();
+        if ($newPlan->getKey() === $this->plan_id) {
+            return $this;
         }
 
-        // Attach new plan to subscription
-        $this->plan_id = $plan->getKey();
-        $this->save();
+        if (! $newPlan->is_active) {
+            throw new InactivePlanException((string) $newPlan->slug);
+        }
 
-        return $this;
-    }
+        return DB::transaction(function () use ($newPlan, $syncUsage): static {
+            $oldPlan = $this->plan;
 
-    /**
-     * Renew subscription period.
-     *
-     * @throws \LogicException
-     *
-     * @return $this
-     */
-    public function renew()
-    {
-        $subscription = $this;
+            $sameBillingFrequency = $oldPlan !== null
+                && $oldPlan->invoice_interval === $newPlan->invoice_interval
+                && $oldPlan->invoice_period === $newPlan->invoice_period;
 
-        DB::transaction(function () use ($subscription) {
-            // Clear usage data
-            $subscription->usage()->delete();
+            if (! $sameBillingFrequency) {
+                $this->setNewPeriod($newPlan->invoice_interval, $newPlan->invoice_period);
+            }
 
-            // Renew period
-            $subscription->setNewPeriod();
-            $subscription->canceled_at = null;
-            $subscription->save();
+            if ($syncUsage) {
+                $newFeatures = $newPlan->features()->get()->keyBy('slug');
+
+                $this->usage()->with('feature')->get()->each(function (PlanSubscriptionUsage $usage) use ($newFeatures): void {
+                    $slug = $usage->feature?->slug;
+                    $target = $slug !== null ? ($newFeatures[$slug] ?? null) : null;
+
+                    if ($target === null) {
+                        $usage->delete();
+
+                        return;
+                    }
+
+                    $usage->feature_id = $target->getKey();
+
+                    if (! $target->isResettable()) {
+                        $usage->valid_until = null;
+                    }
+
+                    $usage->save();
+                });
+            } else {
+                $this->usage()->delete();
+            }
+
+            $this->plan_id = $newPlan->getKey();
+            $this->save();
+            $this->unsetRelation('plan');
+
+            event(new SubscriptionPlanChanged($this, $oldPlan, $newPlan));
+
+            return $this;
         });
+    }
 
-        return $this;
+    /*
+    |--------------------------------------------------------------------------
+    | Feature usage
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Record feature usage, safely and atomically.
+     *
+     * Runs inside a transaction with a row lock, so concurrent requests can
+     * never push usage beyond the feature limit.
+     *
+     * @throws \MiladTech\Subscriptions\Exceptions\SubscriptionException          when the subscription is inactive
+     * @throws \MiladTech\Subscriptions\Exceptions\FeatureNotFoundException       when the plan has no such feature
+     * @throws \MiladTech\Subscriptions\Exceptions\FeatureUsageExceededException  when the limit would be exceeded
+     * @throws \InvalidArgumentException
+     */
+    public function recordFeatureUsage(string $featureSlug, int $uses = 1, bool $incremental = true): PlanSubscriptionUsage
+    {
+        if ($uses < 0) {
+            throw new InvalidArgumentException("Uses must be zero or greater, [{$uses}] given.");
+        }
+
+        if (! $this->active()) {
+            throw new SubscriptionException('Cannot record feature usage on an inactive subscription.');
+        }
+
+        $feature = $this->plan->getFeatureBySlug($featureSlug);
+
+        if ($feature === null) {
+            throw new FeatureNotFoundException($featureSlug, (string) $this->plan->slug);
+        }
+
+        if ($feature->isDisabled()) {
+            throw new FeatureUsageExceededException($featureSlug, $uses, 0);
+        }
+
+        return DB::transaction(function () use ($feature, $featureSlug, $uses, $incremental): PlanSubscriptionUsage {
+            /** @var \MiladTech\Subscriptions\Models\PlanSubscriptionUsage $usage */
+            $usage = $this->usage()
+                ->where('feature_id', $feature->getKey())
+                ->lockForUpdate()
+                ->first() ?? $this->usage()->make(['feature_id' => $feature->getKey(), 'used' => 0]);
+
+            $this->resetUsageIfExpired($usage, $feature);
+
+            $newUsed = $incremental ? $usage->used + $uses : $uses;
+
+            $limit = $feature->limit();
+
+            if ($limit !== null && $newUsed > $limit) {
+                throw new FeatureUsageExceededException($featureSlug, $uses, max(0, $limit - $usage->used));
+            }
+
+            $usage->used = $newUsed;
+            $usage->save();
+
+            event(new FeatureUsageRecorded($usage));
+
+            return $usage;
+        });
     }
 
     /**
-     * Get bookings of the given subscriber.
-     *
-     * @param \Illuminate\Database\Eloquent\Builder $builder
-     * @param \Illuminate\Database\Eloquent\Model   $subscriber
-     *
-     * @return \Illuminate\Database\Eloquent\Builder
+     * Reduce feature usage (never below zero).
      */
+    public function reduceFeatureUsage(string $featureSlug, int $uses = 1): ?PlanSubscriptionUsage
+    {
+        if ($uses < 0) {
+            throw new InvalidArgumentException("Uses must be zero or greater, [{$uses}] given.");
+        }
+
+        return DB::transaction(function () use ($featureSlug, $uses): ?PlanSubscriptionUsage {
+            /** @var \MiladTech\Subscriptions\Models\PlanSubscriptionUsage|null $usage */
+            $usage = $this->usage()->byFeatureSlug($featureSlug)->lockForUpdate()->first();
+
+            if ($usage === null) {
+                return null;
+            }
+
+            $usage->used = max($usage->used - $uses, 0);
+            $usage->save();
+
+            event(new FeatureUsageReduced($usage));
+
+            return $usage;
+        });
+    }
+
+    /**
+     * Set feature usage to an absolute value.
+     */
+    public function setFeatureUsage(string $featureSlug, int $uses): PlanSubscriptionUsage
+    {
+        return $this->recordFeatureUsage($featureSlug, $uses, false);
+    }
+
+    /**
+     * Determine if the feature can be used (a given number of times).
+     */
+    public function canUseFeature(string $featureSlug, int $uses = 1): bool
+    {
+        if (! $this->active()) {
+            return false;
+        }
+
+        $feature = $this->plan->getFeatureBySlug($featureSlug);
+
+        if ($feature === null || $feature->isDisabled()) {
+            return false;
+        }
+
+        if ($feature->limit() === null) {
+            // Boolean ("true") or descriptive feature: enabled, not countable.
+            return true;
+        }
+
+        return $this->getFeatureRemainings($featureSlug) >= max(1, $uses);
+    }
+
+    /**
+     * Get how many times the feature has been used in the current usage period.
+     */
+    public function getFeatureUsage(string $featureSlug): int
+    {
+        /** @var \MiladTech\Subscriptions\Models\PlanSubscriptionUsage|null $usage */
+        $usage = $this->usage()->byFeatureSlug($featureSlug)->first();
+
+        return ($usage === null || $usage->expired()) ? 0 : $usage->used;
+    }
+
+    /**
+     * Get the remaining uses of a feature.
+     *
+     * Unlimited features return PHP_INT_MAX; disabled or missing features return 0.
+     */
+    public function getFeatureRemainings(string $featureSlug): int
+    {
+        $feature = $this->plan->getFeatureBySlug($featureSlug);
+
+        if ($feature === null || $feature->isDisabled()) {
+            return 0;
+        }
+
+        $limit = $feature->limit();
+
+        if ($limit === null) {
+            return PHP_INT_MAX;
+        }
+
+        return max(0, $limit - $this->getFeatureUsage($featureSlug));
+    }
+
+    /**
+     * Get feature raw value.
+     */
+    public function getFeatureValue(string $featureSlug): ?string
+    {
+        return $this->plan->getFeatureBySlug($featureSlug)?->value;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Scopes
+    |--------------------------------------------------------------------------
+    */
+
     public function scopeOfSubscriber(Builder $builder, Model $subscriber): Builder
     {
-        return $builder->where('subscriber_type', $subscriber->getMorphClass())->where('subscriber_id', $subscriber->getKey());
+        return $builder->where('subscriber_type', $subscriber->getMorphClass())
+            ->where('subscriber_id', $subscriber->getKey());
     }
 
-    /**
-     * Scope subscriptions with ending trial.
-     *
-     * @param \Illuminate\Database\Eloquent\Builder $builder
-     * @param int                                   $dayRange
-     *
-     * @return \Illuminate\Database\Eloquent\Builder
-     */
     public function scopeFindEndingTrial(Builder $builder, int $dayRange = 3): Builder
     {
-        $from = Carbon::now();
-        $to = Carbon::now()->addDays($dayRange);
-
-        return $builder->whereBetween('trial_ends_at', [$from, $to]);
+        return $builder->whereBetween('trial_ends_at', [Carbon::now(), Carbon::now()->addDays($dayRange)]);
     }
 
-    /**
-     * Scope subscriptions with ended trial.
-     *
-     * @param \Illuminate\Database\Eloquent\Builder $builder
-     *
-     * @return \Illuminate\Database\Eloquent\Builder
-     */
     public function scopeFindEndedTrial(Builder $builder): Builder
     {
-        return $builder->where('trial_ends_at', '<=', now());
+        return $builder->whereNotNull('trial_ends_at')->where('trial_ends_at', '<=', Carbon::now());
     }
 
-    /**
-     * Scope subscriptions with ending periods.
-     *
-     * @param \Illuminate\Database\Eloquent\Builder $builder
-     * @param int                                   $dayRange
-     *
-     * @return \Illuminate\Database\Eloquent\Builder
-     */
     public function scopeFindEndingPeriod(Builder $builder, int $dayRange = 3): Builder
     {
-        $from = Carbon::now();
-        $to = Carbon::now()->addDays($dayRange);
-
-        return $builder->whereBetween('ends_at', [$from, $to]);
+        return $builder->whereBetween('ends_at', [Carbon::now(), Carbon::now()->addDays($dayRange)]);
     }
 
-    /**
-     * Scope subscriptions with ended periods.
-     *
-     * @param \Illuminate\Database\Eloquent\Builder $builder
-     *
-     * @return \Illuminate\Database\Eloquent\Builder
-     */
     public function scopeFindEndedPeriod(Builder $builder): Builder
     {
-        return $builder->where('ends_at', '<=', now());
+        return $builder->whereNotNull('ends_at')->where('ends_at', '<=', Carbon::now());
     }
 
+    public function scopeFindActive(Builder $builder): Builder
+    {
+        return $builder->whereNull('suspended_at')
+            ->where(function (Builder $query): void {
+                $query->where('ends_at', '>', Carbon::now())
+                    ->orWhere('trial_ends_at', '>', Carbon::now());
+            });
+    }
+
+    public function scopeFindSuspended(Builder $builder): Builder
+    {
+        return $builder->whereNotNull('suspended_at');
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Internals
+    |--------------------------------------------------------------------------
+    */
+
     /**
-     * Set new subscription period.
-     *
-     * @param string $invoice_interval
-     * @param int    $invoice_period
-     * @param string $start
+     * Set a new subscription period on the model (not persisted).
      *
      * @return $this
      */
-    protected function setNewPeriod($invoice_interval = '', $invoice_period = '', $start = '')
+    protected function setNewPeriod(Interval|string|null $invoiceInterval = null, ?int $invoicePeriod = null, CarbonInterface|string|null $start = null): static
     {
-        if (empty($invoice_interval)) {
-            $invoice_interval = $this->plan->invoice_interval;
-        }
+        $plan = $this->relationLoaded('plan') ? $this->plan : $this->plan()->first();
 
-        if (empty($invoice_period)) {
-            $invoice_period = $this->plan->invoice_period;
-        }
+        $interval = $invoiceInterval ?? $plan?->invoice_interval ?? Interval::MONTH;
+        $count = $invoicePeriod ?? $plan?->invoice_period ?? 1;
 
-        $period = new Period($invoice_interval, $invoice_period, $start);
+        $period = new Period($interval, $count, $start);
 
         $this->starts_at = $period->getStartDate();
         $this->ends_at = $period->getEndDate();
@@ -431,148 +752,63 @@ class PlanSubscription extends Model
     }
 
     /**
-     * Record feature usage.
-     *
-     * @param string $featureSlug
-     * @param int    $uses
-     *
-     * @return \MiladTech\Subscriptions\Models\PlanSubscriptionUsage
+     * Reset an expired usage record, catching up as many reset periods as
+     * have elapsed so `valid_until` always lands in the future.
      */
-    public function recordFeatureUsage(string $featureSlug, int $uses = 1, bool $incremental = true): PlanSubscriptionUsage
+    protected function resetUsageIfExpired(PlanSubscriptionUsage $usage, PlanFeature $feature): void
     {
-        $feature = $this->plan->features()->where('slug', $featureSlug)->first();
-        //$trashed = PlanSubscriptionUsage::withTrashed()->whereSubscriptionId($this->getKey())->whereFeatureId($feature->getKey())->first();
-        /*if ($trashed) {
-            if ($trashed->restore()) {
-                $usage = PlanSubscriptionUsage::find($trashed->id);
-            }
-        } else {
-            $usage = $this->usage()->firstOrNew([
-                'subscription_id' => $this->getKey(),
-                'feature_id' => $feature->getKey(),
-            ]);
-        }*/
-        $usage = $this->usage()->firstOrNew([
-            'subscription_id' => $this->getKey(),
-            'feature_id' => $feature->getKey(),
-        ]);
-
-
-        if ($feature->resettable_period) {
-            // Set expiration date when the usage record is new or doesn't have one.
-            if (is_null($usage->valid_until)) {
-                // Set date from subscription creation date so the reset
-                // period match the period specified by the subscription's plan.
-                $usage->valid_until = $feature->getResetDate($this->created_at);
-            } elseif ($usage->expired()) {
-                // If the usage record has been expired, let's assign
-                // a new expiration date and reset the uses to zero.
-                $usage->valid_until = $feature->getResetDate($usage->valid_until);
-                $usage->used = 0;
-            }
+        if (! $feature->isResettable()) {
+            return;
         }
 
-        /*if ($incremental){
-            $usage->used = $usage->used + $uses;
-        } else {
-            $usage->used = $uses;
-        }*/
+        if ($usage->valid_until === null) {
+            // Anchor reset cycles to the subscription start so they
+            // stay aligned with the billing period.
+            $validUntil = $feature->getResetDate($this->starts_at ?? $this->created_at ?? Carbon::now());
 
-        $usage->used = ($incremental ? $usage->used + $uses : $uses);
-        $usage->save();
-
-
-        return $usage;
-    }
-
-    /**
-     * Reduce usage.
-     *
-     * @param string $featureSlug
-     * @param int    $uses
-     *
-     * @return \MiladTech\Subscriptions\Models\PlanSubscriptionUsage|null
-     */
-    public function reduceFeatureUsage(string $featureSlug, int $uses = 1): ?PlanSubscriptionUsage
-    {
-        $usage = $this->usage()->byFeatureSlug($featureSlug)->first();
-
-        if (is_null($usage)) {
-            return null;
-        }
-
-        $usage->used = max($usage->used - $uses, 0);
-        $usage->save();
-
-        return $usage;
-    }
-
-    /**
-     * Determine if the feature can be used.
-     *
-     * @param string $featureSlug
-     *
-     * @return bool
-     */
-    public function canUseFeature(string $featureSlug): bool
-    {
-        $featureValue = $this->getFeatureValue($featureSlug);
-        $usage = $this->usage()->byFeatureSlug($featureSlug)->first();
-        if ($featureValue != null || $featureValue != 0) {
-            if ($usage != null){
-                if ($usage->used >= (int)$featureValue || is_null($featureValue) ||  $featureValue === 'false'){
-                    return false;
-                }
+            while ($validUntil->isPast()) {
+                $validUntil = $feature->getResetDate($validUntil);
             }
-            return true;
+
+            $usage->valid_until = $validUntil;
+
+            return;
         }
 
-        // If the feature value is zero, let's return false since
-        // there's no uses available. (useful to disable countable features)
-        /*        if (! $usage || $usage->expired() || is_null($featureValue) || $featureValue === '0' || $featureValue === 'false') {
-                    return false;
-                }*/
-        // Check for available uses
-        return $this->getFeatureRemainings($featureSlug) > 0;
+        if ($usage->expired()) {
+            $validUntil = $usage->valid_until->copy();
+
+            while ($validUntil->isPast()) {
+                $validUntil = $feature->getResetDate($validUntil);
+            }
+
+            $usage->valid_until = $validUntil;
+            $usage->used = 0;
+        }
     }
 
     /**
-     * Get how many times the feature has been used.
-     *
-     * @param string $featureSlug
-     *
-     * @return int
+     * Guarantee the generated slug is unique per subscriber by suffixing.
      */
-    public function getFeatureUsage(string $featureSlug): int
+    protected function makeSlugUniqueForSubscriber(): void
     {
-        $usage = $this->usage()->byFeatureSlug($featureSlug)->first();
+        $base = $this->slug;
 
-        return (! $usage || $usage->expired()) ? 0 : $usage->used;
-    }
+        if (! $base || ! $this->subscriber_type || ! $this->subscriber_id) {
+            return;
+        }
 
-    /**
-     * Get the available uses.
-     *
-     * @param string $featureSlug
-     *
-     * @return int
-     */
-    public function getFeatureRemainings(string $featureSlug): int
-    {
-        return $this->getFeatureValue($featureSlug) - $this->getFeatureUsage($featureSlug);
-    }
+        $slug = $base;
+        $suffix = 1;
 
-    /**
-     * Get feature value.
-     *
-     * @param string $featureSlug
-     *
-     * @return mixed
-     */
-    public function getFeatureValue(string $featureSlug)
-    {
-        $feature = $this->plan->features()->where('slug', $featureSlug)->first();
+        while (static::withTrashed()
+            ->where('subscriber_type', $this->subscriber_type)
+            ->where('subscriber_id', $this->subscriber_id)
+            ->where('slug', $slug)
+            ->exists()) {
+            $slug = $base.'-'.(++$suffix);
+        }
 
-        return $feature->value ?? null;
+        $this->slug = $slug;
     }
 }

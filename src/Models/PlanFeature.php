@@ -5,60 +5,50 @@ declare(strict_types=1);
 namespace MiladTech\Subscriptions\Models;
 
 use Carbon\Carbon;
-use Spatie\Sluggable\SlugOptions;
-use MiladTech\Support\Traits\HasSlug;
-use Spatie\EloquentSortable\Sortable;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
-use MiladTech\Subscriptions\Services\Period;
-use MiladTech\Support\Traits\HasTranslations;
-use MiladTech\Support\Traits\ValidatingTrait;
-use Spatie\EloquentSortable\SortableTrait;
-use Illuminate\Database\Eloquent\SoftDeletes;
-use MiladTech\Subscriptions\Traits\BelongsToPlan;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use MiladTech\Subscriptions\Enums\Interval;
+use MiladTech\Subscriptions\Services\Period;
+use MiladTech\Subscriptions\Traits\BelongsToPlan;
+use Pishran\LaravelPersianSlug\HasPersianSlug;
+use Spatie\EloquentSortable\Sortable;
+use Spatie\EloquentSortable\SortableTrait;
+use Spatie\Sluggable\SlugOptions;
+use Spatie\Translatable\HasTranslations;
 
 /**
  * MiladTech\Subscriptions\Models\PlanFeature.
  *
- * @property int                 $id
- * @property int                 $plan_id
- * @property string              $slug
- * @property array               $title
- * @property array               $description
- * @property string              $value
- * @property int                 $resettable_period
- * @property string              $resettable_interval
- * @property int                 $sort_order
- * @property \Carbon\Carbon|null $created_at
- * @property \Carbon\Carbon|null $updated_at
- * @property \Carbon\Carbon|null $deleted_at
- * @property-read \MiladTech\Subscriptions\Models\Plan                                                             $plan
- * @property-read \Illuminate\Database\Eloquent\Collection|\MiladTech\Subscriptions\Models\PlanSubscriptionUsage[] $usage
+ * Feature `value` semantics:
+ *  - "true"            => boolean feature, enabled / unlimited usage
+ *  - "false", "0", ""  => disabled feature
+ *  - numeric string    => countable feature with that usage limit
+ *  - anything else     => descriptive feature (treated as enabled)
  *
- * @method static \Illuminate\Database\Eloquent\Builder|\MiladTech\Subscriptions\Models\PlanFeature byPlanId($planId)
- * @method static \Illuminate\Database\Eloquent\Builder|\MiladTech\Subscriptions\Models\PlanFeature ordered($direction = 'asc')
- * @method static \Illuminate\Database\Eloquent\Builder|\MiladTech\Subscriptions\Models\PlanFeature whereCreatedAt($value)
- * @method static \Illuminate\Database\Eloquent\Builder|\MiladTech\Subscriptions\Models\PlanFeature whereDeletedAt($value)
- * @method static \Illuminate\Database\Eloquent\Builder|\MiladTech\Subscriptions\Models\PlanFeature whereDescription($value)
- * @method static \Illuminate\Database\Eloquent\Builder|\MiladTech\Subscriptions\Models\PlanFeature whereId($value)
- * @method static \Illuminate\Database\Eloquent\Builder|\MiladTech\Subscriptions\Models\PlanFeature whereTitle($value)
- * @method static \Illuminate\Database\Eloquent\Builder|\MiladTech\Subscriptions\Models\PlanFeature wherePlanId($value)
- * @method static \Illuminate\Database\Eloquent\Builder|\MiladTech\Subscriptions\Models\PlanFeature whereResettableInterval($value)
- * @method static \Illuminate\Database\Eloquent\Builder|\MiladTech\Subscriptions\Models\PlanFeature whereResettablePeriod($value)
- * @method static \Illuminate\Database\Eloquent\Builder|\MiladTech\Subscriptions\Models\PlanFeature whereSlug($value)
- * @method static \Illuminate\Database\Eloquent\Builder|\MiladTech\Subscriptions\Models\PlanFeature whereSortOrder($value)
- * @method static \Illuminate\Database\Eloquent\Builder|\MiladTech\Subscriptions\Models\PlanFeature whereUpdatedAt($value)
- * @method static \Illuminate\Database\Eloquent\Builder|\MiladTech\Subscriptions\Models\PlanFeature whereValue($value)
- * @mixin \Eloquent
+ * @property int                                     $id
+ * @property int                                     $plan_id
+ * @property string                                  $slug
+ * @property array                                   $name
+ * @property array|null                              $description
+ * @property string                                  $value
+ * @property int                                     $resettable_period
+ * @property \MiladTech\Subscriptions\Enums\Interval $resettable_interval
+ * @property int                                     $sort_order
+ * @property \Carbon\Carbon|null                     $created_at
+ * @property \Carbon\Carbon|null                     $updated_at
+ * @property \Carbon\Carbon|null                     $deleted_at
+ * @property-read \MiladTech\Subscriptions\Models\Plan                                                          $plan
+ * @property-read \Illuminate\Database\Eloquent\Collection|\MiladTech\Subscriptions\Models\PlanSubscriptionUsage[] $usage
  */
 class PlanFeature extends Model implements Sortable
 {
-    use HasSlug;
-    use SoftDeletes;
     use BelongsToPlan;
-    use SortableTrait;
+    use HasPersianSlug;
     use HasTranslations;
-    use ValidatingTrait;
+    use SoftDeletes;
+    use SortableTrait;
 
     /**
      * {@inheritdoc}
@@ -82,7 +72,7 @@ class PlanFeature extends Model implements Sortable
         'slug' => 'string',
         'value' => 'string',
         'resettable_period' => 'integer',
-        'resettable_interval' => 'string',
+        'resettable_interval' => Interval::class,
         'sort_order' => 'integer',
         'deleted_at' => 'datetime',
     ];
@@ -90,9 +80,9 @@ class PlanFeature extends Model implements Sortable
     /**
      * {@inheritdoc}
      */
-    protected $observables = [
-        'validating',
-        'validated',
+    protected $attributes = [
+        'resettable_period' => 0,
+        'resettable_interval' => 'month',
     ];
 
     /**
@@ -115,38 +105,11 @@ class PlanFeature extends Model implements Sortable
     ];
 
     /**
-     * The default rules that the model will validate against.
-     *
-     * @var array
-     */
-    protected $rules = [];
-
-    /**
-     * Whether the model should throw a
-     * ValidationException if it fails validation.
-     *
-     * @var bool
-     */
-    protected $throwValidationExceptions = true;
-
-    /**
      * Create a new Eloquent model instance.
-     *
-     * @param array $attributes
      */
     public function __construct(array $attributes = [])
     {
         $this->setTable(config('miladtech.subscriptions.tables.plan_features'));
-        $this->mergeRules([
-            'plan_id' => 'required|integer|exists:'.config('miladtech.subscriptions.tables.plans').',id',
-            'slug' => 'required|alpha_dash|max:150|unique:'.config('miladtech.subscriptions.tables.plan_features').',slug',
-            'name' => 'required|string|strip_tags|max:150',
-            'description' => 'nullable|string|max:32768',
-            'value' => 'required|string',
-            'resettable_period' => 'sometimes|integer',
-            'resettable_interval' => 'sometimes|in:hour,day,week,month',
-            'sort_order' => 'nullable|integer|max:100000',
-        ]);
 
         parent::__construct($attributes);
     }
@@ -158,28 +121,30 @@ class PlanFeature extends Model implements Sortable
     {
         parent::boot();
 
-        static::deleted(function ($plan_feature) {
-            $plan_feature->usage()->delete();
+        static::deleted(function (self $feature): void {
+            $feature->usage()->delete();
         });
     }
 
     /**
      * Get the options for generating the slug.
      *
-     * @return \Spatie\Sluggable\SlugOptions
+     * Duplicate slugs are allowed globally (uniqueness is enforced
+     * per-plan by the database) so the same feature slug — e.g. "sms" —
+     * can exist on several plans. This is what makes usage data
+     * transferable when a subscription changes plan.
      */
     public function getSlugOptions(): SlugOptions
     {
         return SlugOptions::create()
             ->doNotGenerateSlugsOnUpdate()
             ->generateSlugsFrom('name')
+            ->allowDuplicateSlugs()
             ->saveSlugsTo('slug');
     }
 
     /**
      * The plan feature may have many subscription usage.
-     *
-     * @return \Illuminate\Database\Eloquent\Relations\HasMany
      */
     public function usage(): HasMany
     {
@@ -187,15 +152,54 @@ class PlanFeature extends Model implements Sortable
     }
 
     /**
-     * Get feature's reset date.
-     *
-     * @param string $dateFrom
-     *
-     * @return \Carbon\Carbon
+     * Whether usage of this feature resets periodically.
      */
-    public function getResetDate(Carbon $dateFrom): Carbon
+    public function isResettable(): bool
     {
-        $period = new Period($this->resettable_interval, $this->resettable_period, $dateFrom ?? now());
+        return $this->resettable_period > 0;
+    }
+
+    /**
+     * Whether the feature is disabled ("false", "0", "", or null).
+     */
+    public function isDisabled(): bool
+    {
+        $value = strtolower(trim((string) $this->value));
+
+        return in_array($value, ['false', '0', ''], true);
+    }
+
+    /**
+     * Whether the feature is an enabled boolean/unlimited feature ("true").
+     */
+    public function isUnlimited(): bool
+    {
+        return strtolower(trim((string) $this->value)) === 'true';
+    }
+
+    /**
+     * The countable usage limit, or null when the feature is not countable
+     * (boolean/unlimited or descriptive value).
+     */
+    public function limit(): ?int
+    {
+        $value = trim((string) $this->value);
+
+        if (! is_numeric($value)) {
+            return null;
+        }
+
+        $limit = (int) $value;
+
+        return $limit > 0 ? $limit : null;
+    }
+
+    /**
+     * Get feature's next reset date, starting from the given date.
+     */
+    public function getResetDate(CarbonInterface|string|null $dateFrom = null): Carbon
+    {
+        $period = new Period($this->resettable_interval, $this->resettable_period, $dateFrom ?? Carbon::now());
 
         return $period->getEndDate();
     }

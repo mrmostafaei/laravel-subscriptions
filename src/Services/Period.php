@@ -5,99 +5,64 @@ declare(strict_types=1);
 namespace MiladTech\Subscriptions\Services;
 
 use Carbon\Carbon;
+use Carbon\CarbonInterface;
+use InvalidArgumentException;
+use MiladTech\Subscriptions\Enums\Interval;
 
 class Period
 {
-    /**
-     * Starting date of the period.
-     *
-     * @var string
-     */
-    protected $start;
+    protected Carbon $start;
 
-    /**
-     * Ending date of the period.
-     *
-     * @var string
-     */
-    protected $end;
+    protected Carbon $end;
 
-    /**
-     * Interval.
-     *
-     * @var string
-     */
-    protected $interval;
+    protected Interval $interval;
 
-    /**
-     * Interval count.
-     *
-     * @var int
-     */
-    protected $period = 1;
+    protected int $period;
 
     /**
      * Create a new Period instance.
      *
-     * @param string $interval
-     * @param int    $count
-     * @param string $start
+     * @param \MiladTech\Subscriptions\Enums\Interval|string $interval hour|day|week|month|year
+     * @param int                                            $count    how many intervals the period spans (>= 0)
+     * @param \Carbon\CarbonInterface|string|null            $start    period start (defaults to now)
      *
-     * @return void
+     * @throws \MiladTech\Subscriptions\Exceptions\InvalidIntervalException
+     * @throws \InvalidArgumentException
      */
-    public function __construct($interval = 'month', $count = 1, $start = '')
+    public function __construct(Interval|string $interval = Interval::MONTH, int $count = 1, CarbonInterface|string|null $start = null)
     {
-        $this->interval = $interval;
-
-        if (empty($start)) {
-            $this->start = Carbon::now();
-        } elseif (! $start instanceof Carbon) {
-            $this->start = new Carbon($start);
-        } else {
-            $this->start = $start;
+        if ($count < 0) {
+            throw new InvalidArgumentException("Period count must be zero or greater, [{$count}] given.");
         }
 
+        $this->interval = Interval::fromString($interval);
         $this->period = $count;
-        $start = clone $this->start;
-        $method = 'add'.ucfirst($this->interval).'s';
-        $this->end = $start->{$method}($this->period);
+
+        $this->start = match (true) {
+            $start === null, $start === '' => Carbon::now(),
+            $start instanceof CarbonInterface => Carbon::instance($start),
+            default => Carbon::parse($start),
+        };
+
+        // Month/year additions never overflow (e.g. Jan 31 + 1 month = Feb 28, not Mar 3).
+        $this->end = Carbon::instance($this->interval->addTo($this->start, $this->period));
     }
 
-    /**
-     * Get start date.
-     *
-     * @return \Carbon\Carbon
-     */
     public function getStartDate(): Carbon
     {
-        return $this->start;
+        return $this->start->copy();
     }
 
-    /**
-     * Get end date.
-     *
-     * @return \Carbon\Carbon
-     */
     public function getEndDate(): Carbon
     {
-        return $this->end;
+        return $this->end->copy();
     }
 
-    /**
-     * Get period interval.
-     *
-     * @return string
-     */
-    public function getInterval(): string
+    public function getInterval(): Interval
     {
         return $this->interval;
     }
 
-    /**
-     * Get period interval count.
-     *
-     * @return int
-     */
     public function getIntervalCount(): int
     {
         return $this->period;

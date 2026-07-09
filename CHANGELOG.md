@@ -4,6 +4,45 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](CONTRIBUTING.md).
 
+## [v8.0.0] - 2026-07-09
+
+### Added
+- Laravel 11, 12 & 13 support (PHP 8.2+).
+- `year` billing/reset interval.
+- Real grace period support: `active()` / `onGracePeriod()` / `graceEndsAt()` honor the plan's grace settings.
+- Suspend/resume: `suspend()`, `resume()` (paused time is credited back to `ends_at`).
+- Scheduled cancellation revert: `uncancel()`.
+- Multi-period renewal: `renew(int $periods = 1)`.
+- Absolute usage setter: `setFeatureUsage()`, plus `canUseFeature($slug, $uses)` for bulk checks.
+- Lifecycle events: `SubscriptionCreated`, `SubscriptionRenewed`, `SubscriptionCanceled`, `SubscriptionUncanceled`, `SubscriptionSuspended`, `SubscriptionResumed`, `SubscriptionPlanChanged`, `SubscriptionExpired`, `SubscriptionTrialEnded`, `FeatureUsageRecorded`, `FeatureUsageReduced`.
+- `subscriptions:check` artisan command — fires trial-ended/expired events exactly once (grace aware); schedule it.
+- Domain exceptions: `FeatureNotFoundException`, `FeatureUsageExceededException`, `InactivePlanException`, `PlanSubscribersLimitReachedException`, `InvalidIntervalException` (all extend `SubscriptionException`).
+- `active_subscribers_limit` is now actually enforced on subscribe.
+- Full test suite (PHPUnit + Testbench) and GitHub Actions CI matrix.
+
+### Fixed
+- `renew()` no longer discards remaining paid time: early renewals extend from `ends_at`; only expired subscriptions restart from now (and only then is usage cleared).
+- `canUseFeature()` boolean logic rewritten (the old condition was always true) with clear value semantics: `"true"` = unlimited, `"false"`/`"0"` = disabled, numeric = limit.
+- Plans without trial no longer set a bogus `trial_ends_at` (and no longer crash on `null` trial interval).
+- Deleting a plan no longer causes a fatal error (`planSubscriptions()` did not exist); cascades now fire child model events so usage is cleaned up.
+- `bootHasSubscriptions()` was misnamed and never ran on `HasPlanSubscriptions`; deleting a subscriber now cleans its subscriptions and usage.
+- Race conditions in `recordFeatureUsage()`/`reduceFeatureUsage()` eliminated with transactions + row locks; a DB unique index guarantees one usage row per subscription/feature.
+- Usage limits are enforced: exceeding a feature limit throws instead of silently overrunning.
+- Expired usage reset now catches up multiple elapsed reset periods (previously `valid_until` could stay in the past).
+- Month/year date math no longer overflows (Jan 31 + 1 month = Feb 28, not Mar 3).
+- Subscription slugs are unique per subscriber (composite index) instead of globally, so every subscriber can own e.g. `main`; the broken `LIKE %slug%` lookup is now an exact match.
+- Feature slugs are unique per plan, letting plans share feature slugs — plan changes migrate usage to the new plan's features by slug and drop usage of removed features.
+- `changePlan()` validates the target plan is active; immediate cancel also ends an active trial.
+- `subscribedPlans()` return type fixed; `scopeByFeatureSlug` no longer matches features of other plans.
+
+### Changed (breaking)
+- Requires PHP >= 8.2 and Laravel 11/12/13; dependency on `miladtech/laravel-support` removed — the package is self-contained.
+- Interval columns are cast to the `MiladTech\Subscriptions\Enums\Interval` enum.
+- Validation via `ValidatingTrait` removed; invalid intervals throw, DB constraints enforce integrity.
+- `recordFeatureUsage()` throws on exceeded limits/unknown features/inactive subscriptions instead of failing silently.
+- Legacy `miladtech:migrate/publish/rollback:subscriptions` commands removed — use standard `vendor:publish` and `migrate`.
+- Existing installs: publish and run the v2 upgrade migration (`--tag=miladtech-subscriptions-upgrade`), see UPGRADE.md.
+
 ## [v7.0.0] - 2024-02-23
 - Laravel 10 Support
 

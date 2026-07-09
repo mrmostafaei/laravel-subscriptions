@@ -2,54 +2,49 @@
 
 declare(strict_types=1);
 
-use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
 
-class CreatePlansTable extends Migration
-{
+return new class () extends Migration {
     /**
      * Run the migrations.
-     *
-     * @return void
      */
     public function up(): void
     {
-        Schema::create(config('miladtech.subscriptions.tables.plans'), function (Blueprint $table) {
-            // Columns
-            $table->increments('id');
+        Schema::create(config('miladtech.subscriptions.tables.plans'), function (Blueprint $table): void {
+            $table->id();
             $table->string('slug');
             $table->json('name');
             $table->json('description')->nullable();
             $table->boolean('is_active')->default(true);
-            $table->decimal('price')->default('0.00');
-            $table->decimal('signup_fee')->default('0.00');
-            $table->string('currency', 3);
-            $table->smallInteger('trial_period')->unsigned()->default(0);
+            $table->decimal('price', 12, 2)->default(0);
+            $table->decimal('signup_fee', 12, 2)->default(0);
+            $table->string('currency', 3)->default('IRR');
+            $table->unsignedSmallInteger('trial_period')->default(0);
             $table->string('trial_interval')->default('day');
-            $table->smallInteger('invoice_period')->unsigned()->default(0);
+            $table->unsignedSmallInteger('invoice_period')->default(1);
             $table->string('invoice_interval')->default('month');
-            $table->smallInteger('grace_period')->unsigned()->default(0);
+            $table->unsignedSmallInteger('grace_period')->default(0);
             $table->string('grace_interval')->default('day');
-            $table->tinyInteger('prorate_day')->unsigned()->nullable();
-            $table->tinyInteger('prorate_period')->unsigned()->nullable();
-            $table->tinyInteger('prorate_extend_due')->unsigned()->nullable();
-            $table->smallInteger('active_subscribers_limit')->unsigned()->nullable();
-            $table->mediumInteger('sort_order')->unsigned()->default(0);
+            $table->unsignedTinyInteger('prorate_day')->nullable();
+            $table->unsignedTinyInteger('prorate_period')->nullable();
+            $table->unsignedTinyInteger('prorate_extend_due')->nullable();
+            $table->unsignedInteger('active_subscribers_limit')->nullable();
+            $table->unsignedMediumInteger('sort_order')->default(0);
             $table->timestamps();
             $table->softDeletes();
 
-            // Indexes
             $table->unique('slug');
+            $table->index('is_active');
         });
     }
 
     /**
      * Reverse the migrations.
-     *
-     * @return void
      */
     public function down(): void
     {
         Schema::dropIfExists(config('miladtech.subscriptions.tables.plans'));
     }
-}
+};

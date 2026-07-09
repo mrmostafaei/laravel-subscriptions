@@ -11,8 +11,6 @@ trait BelongsToPlan
 {
     /**
      * The model always belongs to a plan.
-     *
-     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
      */
     public function plan(): BelongsTo
     {
@@ -21,13 +19,8 @@ trait BelongsToPlan
 
     /**
      * Scope models by plan id.
-     *
-     * @param \Illuminate\Database\Eloquent\Builder $builder
-     * @param int                                   $planId
-     *
-     * @return \Illuminate\Database\Eloquent\Builder
      */
-    public function scopeByPlanId(Builder $builder, int $planId): Builder
+    public function scopeByPlanId(Builder $builder, int|string $planId): Builder
     {
         return $builder->where('plan_id', $planId);
     }

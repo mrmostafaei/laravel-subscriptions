@@ -2,46 +2,44 @@
 
 declare(strict_types=1);
 
-use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
 
-class CreatePlanFeaturesTable extends Migration
-{
+return new class () extends Migration {
     /**
      * Run the migrations.
-     *
-     * @return void
      */
     public function up(): void
     {
-        Schema::create(config('miladtech.subscriptions.tables.plan_features'), function (Blueprint $table) {
-            // Columns
-            $table->increments('id');
-            $table->integer('plan_id')->unsigned();
+        Schema::create(config('miladtech.subscriptions.tables.plan_features'), function (Blueprint $table): void {
+            $table->id();
+            $table->foreignId('plan_id')
+                ->constrained(config('miladtech.subscriptions.tables.plans'))
+                ->cascadeOnDelete()
+                ->cascadeOnUpdate();
             $table->string('slug');
             $table->json('name');
             $table->json('description')->nullable();
             $table->string('value');
-            $table->smallInteger('resettable_period')->unsigned()->default(0);
+            $table->unsignedSmallInteger('resettable_period')->default(0);
             $table->string('resettable_interval')->default('month');
-            $table->mediumInteger('sort_order')->unsigned()->default(0);
+            $table->unsignedMediumInteger('sort_order')->default(0);
             $table->timestamps();
             $table->softDeletes();
 
-            // Indexes
+            // Feature slugs are unique per plan (NOT globally) so the same
+            // slug — e.g. "sms" — can exist on several plans, which is what
+            // makes usage transferable when a subscription changes plan.
             $table->unique(['plan_id', 'slug']);
-            $table->foreign('plan_id')->references('id')->on(config('miladtech.subscriptions.tables.plans'))
-                  ->onDelete('cascade')->onUpdate('cascade');
         });
     }
 
     /**
      * Reverse the migrations.
-     *
-     * @return void
      */
     public function down(): void
     {
         Schema::dropIfExists(config('miladtech.subscriptions.tables.plan_features'));
     }
-}
+};

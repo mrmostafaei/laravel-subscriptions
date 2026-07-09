@@ -32,18 +32,17 @@
     ],
     "require": {
         "php": "^8.2",
-        "illuminate/console": "^8.0.0 || ^9.0.0 || ^10.0 || ^11.0 || ^12.0",
-        "illuminate/database": "^8.0.0 || ^9.0.0 || ^10.0 || ^11.0 || ^12.0",
-        "illuminate/support": "^8.0.0 || ^9.0.0 || ^10.0 || ^11.0 || ^12.0",
-        "miladtech/laravel-support": "^6.0.0 || ^7.0.0 || ^8.0",
-        "spatie/eloquent-sortable": "^4.0.0",
-        "pishran/laravel-persian-slug": "^2.2.2",
-        "spatie/laravel-translatable": "^6.5.5"
+        "illuminate/console": "^11.0 || ^12.0 || ^13.0",
+        "illuminate/database": "^11.0 || ^12.0 || ^13.0",
+        "illuminate/support": "^11.0 || ^12.0 || ^13.0",
+        "spatie/eloquent-sortable": "^4.0",
+        "spatie/laravel-sluggable": "^3.7",
+        "spatie/laravel-translatable": "^6.5",
+        "pishran/laravel-persian-slug": "^2.2.2"
     },
     "require-dev": {
-        "codedungeon/phpunit-result-printer": "^0.31.0",
-        "illuminate/container": "^8.0.0 || ^9.0.0 || ^10.0.0 || ^11.0 || ^12.0",
-        "phpunit/phpunit": "^8.0.0 || ^9.0.0 || ^10.0 || ^11.0"
+        "orchestra/testbench": "^9.0 || ^10.0 || ^11.0",
+        "phpunit/phpunit": "^10.5 || ^11.0 || ^12.0"
     },
     "autoload": {
         "psr-4": {
@@ -70,6 +69,6 @@
             ]
         }
     },
-    "minimum-stability": "dev",
+    "minimum-stability": "stable",
     "prefer-stable": true
 }

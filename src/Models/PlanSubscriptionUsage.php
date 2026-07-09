@@ -5,10 +5,8 @@ declare(strict_types=1);
 namespace MiladTech\Subscriptions\Models;
 
 use Carbon\Carbon;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Builder;
-use MiladTech\Support\Traits\ValidatingTrait;
-use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
@@ -21,25 +19,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property \Carbon\Carbon|null $valid_until
  * @property \Carbon\Carbon|null $created_at
  * @property \Carbon\Carbon|null $updated_at
- * @property \Carbon\Carbon|null $deleted_at
  * @property-read \MiladTech\Subscriptions\Models\PlanFeature      $feature
  * @property-read \MiladTech\Subscriptions\Models\PlanSubscription $subscription
- *
- * @method static \Illuminate\Database\Eloquent\Builder|\MiladTech\Subscriptions\Models\PlanSubscriptionUsage byFeatureSlug($featureSlug)
- * @method static \Illuminate\Database\Eloquent\Builder|\MiladTech\Subscriptions\Models\PlanSubscriptionUsage whereCreatedAt($value)
- * @method static \Illuminate\Database\Eloquent\Builder|\MiladTech\Subscriptions\Models\PlanSubscriptionUsage whereDeletedAt($value)
- * @method static \Illuminate\Database\Eloquent\Builder|\MiladTech\Subscriptions\Models\PlanSubscriptionUsage whereFeatureId($value)
- * @method static \Illuminate\Database\Eloquent\Builder|\MiladTech\Subscriptions\Models\PlanSubscriptionUsage whereId($value)
- * @method static \Illuminate\Database\Eloquent\Builder|\MiladTech\Subscriptions\Models\PlanSubscriptionUsage whereSubscriptionId($value)
- * @method static \Illuminate\Database\Eloquent\Builder|\MiladTech\Subscriptions\Models\PlanSubscriptionUsage whereUpdatedAt($value)
- * @method static \Illuminate\Database\Eloquent\Builder|\MiladTech\Subscriptions\Models\PlanSubscriptionUsage whereUsed($value)
- * @method static \Illuminate\Database\Eloquent\Builder|\MiladTech\Subscriptions\Models\PlanSubscriptionUsage whereValidUntil($value)
- * @mixin \Eloquent
  */
 class PlanSubscriptionUsage extends Model
 {
-    use ValidatingTrait;
-
     /**
      * {@inheritdoc}
      */
@@ -57,54 +41,28 @@ class PlanSubscriptionUsage extends Model
         'subscription_id' => 'integer',
         'feature_id' => 'integer',
         'used' => 'integer',
-        'valid_until' => 'datetime'
+        'valid_until' => 'datetime',
     ];
 
     /**
      * {@inheritdoc}
      */
-    protected $observables = [
-        'validating',
-        'validated',
+    protected $attributes = [
+        'used' => 0,
     ];
 
     /**
-     * The default rules that the model will validate against.
-     *
-     * @var array
-     */
-    protected $rules = [];
-
-    /**
-     * Whether the model should throw a
-     * ValidationException if it fails validation.
-     *
-     * @var bool
-     */
-    protected $throwValidationExceptions = true;
-
-    /**
      * Create a new Eloquent model instance.
-     *
-     * @param array $attributes
      */
     public function __construct(array $attributes = [])
     {
         $this->setTable(config('miladtech.subscriptions.tables.plan_subscription_usage'));
-        $this->mergeRules([
-            'subscription_id' => 'required|integer|exists:'.config('miladtech.subscriptions.tables.plan_subscriptions').',id',
-            'feature_id' => 'required|integer|exists:'.config('miladtech.subscriptions.tables.plan_features').',id',
-            'used' => 'required|integer',
-            'valid_until' => 'nullable|date',
-        ]);
 
         parent::__construct($attributes);
     }
 
     /**
      * Subscription usage always belongs to a plan feature.
-     *
-     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
      */
     public function feature(): BelongsTo
     {
@@ -113,8 +71,6 @@ class PlanSubscriptionUsage extends Model
 
     /**
      * Subscription usage always belongs to a plan subscription.
-     *
-     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
      */
     public function subscription(): BelongsTo
     {
@@ -124,26 +80,22 @@ class PlanSubscriptionUsage extends Model
     /**
      * Scope subscription usage by feature slug.
      *
-     * @param \Illuminate\Database\Eloquent\Builder $builder
-     * @param string                                $featureSlug
-     *
-     * @return \Illuminate\Database\Eloquent\Builder
+     * Matched through the feature relation so features of other
+     * plans that happen to share the slug are never picked up.
      */
     public function scopeByFeatureSlug(Builder $builder, string $featureSlug): Builder
     {
-        $feature = app('miladtech.subscriptions.plan_feature')->where('slug', $featureSlug)->first();
-
-        return $builder->where('feature_id', $feature ? $feature->getKey() : null);
+        return $builder->whereHas('feature', function (Builder $query) use ($featureSlug): void {
+            $query->where('slug', $featureSlug);
+        });
     }
 
     /**
      * Check whether usage has been expired or not.
-     *
-     * @return bool
      */
     public function expired(): bool
     {
-        if (is_null($this->valid_until)) {
+        if ($this->valid_until === null) {
             return false;
         }
 
